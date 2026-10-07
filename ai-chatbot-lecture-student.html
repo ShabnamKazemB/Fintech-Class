@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Large language models: the mechanics of AI chatbots (student copy)</title>
+<style>
+:root{
+  /* University of St Andrews palette: blue #00539B, mid blue #007DC5, light blue #00AEEF, red #EE312A, yellow #FFDF00, black #231F20 */
+  --paper:#E9EEF4; --slide:#FFFFFF; --panel:#F5F8FB; --ink:#231F20; --muted:#5A6472; --rule:#D5DDE6;
+  --brand:#00539B; --brand-ink:#FFFFFF;
+  --gain:#00539B; --gain-soft:#E3EDF6;
+  --loss:#C8231D; --loss-soft:#FCE9E8;
+  --gold:#007DC5; --gold-soft:#EAF4FB; --chip:#E6ECF2; --accent:#FFDF00;
+  --shadow:0 10px 40px rgba(0,40,80,.12);
+  --font:"Times New Roman", Times, "Liberation Serif", serif;
+  --serif:"Times New Roman", Times, "Liberation Serif", serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0A1A2B; --slide:#10243A; --panel:#15304C; --ink:#ECF1F6; --muted:#A5B4C5; --rule:#27425F;
+    --brand:#0B5FA8; --gain:#5FB3F0; --gain-soft:#173A5C; --loss:#F07A74; --loss-soft:#3E2230;
+    --gold:#5FC4F2; --gold-soft:#16354F; --chip:#1C3957; --shadow:0 10px 40px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0A1A2B; --slide:#10243A; --panel:#15304C; --ink:#ECF1F6; --muted:#A5B4C5; --rule:#27425F;
+  --brand:#0B5FA8; --gain:#5FB3F0; --gain-soft:#173A5C; --loss:#F07A74; --loss-soft:#3E2230;
+  --gold:#5FC4F2; --gold-soft:#16354F; --chip:#1C3957; --shadow:0 10px 40px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--font);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+#viewport{position:fixed;inset:12px 12px 68px 12px;display:flex;align-items:center;justify-content:center}
+#stage{width:1280px;height:720px;position:relative;transform-origin:center center;flex:none;background:var(--slide);box-shadow:var(--shadow);border-radius:4px;overflow:hidden}
+.slide{position:absolute;inset:0;padding:56px 80px 76px;display:none;flex-direction:column;border-top:8px solid var(--brand)}
+.slide.active{display:flex}
+.slide h1{font-size:80px;line-height:1.05;font-weight:700;max-width:18ch}
+.slide h2{font-size:46px;line-height:1.12;font-weight:700;color:var(--brand);max-width:40ch;margin-bottom:26px}
+.slide p,.slide li{font-size:25px;line-height:1.42;max-width:62ch}
+.lede{color:var(--muted);font-size:26px}
+.layer{font-size:20px;font-style:italic;color:var(--gold);margin-bottom:8px}
+.small{font-size:17px!important;color:var(--muted)}
+ul.plain{list-style:none;display:grid;gap:14px;align-content:start}
+ul.plain li{padding-left:22px;position:relative}
+ul.plain[style] li{font-size:var(--fs)}
+ul.plain li::before{content:"";position:absolute;left:0;top:.55em;width:9px;height:9px;background:var(--brand);border-radius:1px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:40px;flex:1;min-height:0}
+.box{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:24px 28px}
+.btn{background:var(--brand);color:#fff;border:0;border-radius:4px;padding:10px 20px;font-size:19px;font-weight:700}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.ghost{background:transparent;color:var(--gain);border:2px solid var(--gain)}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+/* title slide */
+.slide.title-slide{background:var(--brand);color:#fff;border-top:0;padding-left:110px}
+.slide.title-slide:first-child::before{content:"";position:absolute;left:80px;top:180px;bottom:180px;width:6px;background:var(--accent)}
+.slide.title-slide h1,.slide.title-slide h2{color:#fff}
+.slide.title-slide .lede{color:#CFE3F4!important;font-family:var(--serif);font-style:italic}
+.slide.title-slide ul.plain li::before{background:var(--accent)}
+.slide.title-slide .sfoot{display:none}
+.title-slide{justify-content:space-between}
+.ticker{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.ticker span{font-size:22px;padding:6px 12px;border-radius:6px;background:var(--chip);font-variant-numeric:tabular-nums}
+.ticker b{color:var(--gain)}
+
+/* chat mock */
+.chat{display:flex;flex-direction:column;gap:14px;max-width:880px}
+.msg{padding:16px 22px;border-radius:6px;font-size:22px;line-height:1.45;max-width:78%}
+.msg.user{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+.msg.bot{align-self:flex-start;background:var(--panel);box-shadow:0 2px 8px rgba(0,40,80,.06);border:1px solid var(--rule);border-bottom-left-radius:4px;min-height:60px}
+.who{font-size:14px;color:var(--muted);margin-bottom:4px}
+.msg.user .who{color:inherit;opacity:.7}
+.warn{border-color:var(--loss)!important}
+.stamp{display:inline-block;margin-top:10px;font-size:17px;font-style:italic;color:var(--loss);border-left:3px solid var(--loss);padding:0 8px}
+
+/* guesses */
+.guesses{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px}
+.guess{background:var(--panel);border:1px solid var(--rule);border-left:6px solid var(--rule);border-radius:4px;padding:22px 24px;font-size:24px;text-align:left;transition:opacity .3s}
+.guess.reveal-right{border-color:var(--gain);border-left-color:var(--gain);background:var(--gain-soft);font-weight:700}
+.guess.reveal-wrong{opacity:.45}
+
+/* zoom levels */
+.zoom{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.zl{display:grid;grid-template-columns:52px 260px 1fr;align-items:center;background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:8px 16px;font-size:21px}
+.zl .n{font-weight:700;color:var(--gain);font-size:22px}
+.zl .t{font-weight:700}
+.zl .d{color:var(--muted)}
+
+.defbox{background:var(--gold-soft);border-left:5px solid var(--brand);border-radius:4px;padding:12px 18px;font-size:21px;line-height:1.4;margin-bottom:14px}
+table.cmp.layers{font-size:18px;line-height:1.3}
+table.cmp.layers td,table.cmp.layers th{padding:7px 12px}
+table.cmp.layers td:first-child{width:44px;font-weight:700;color:#fff;background:var(--brand);text-align:center}
+table.cmp.layers td:nth-child(2){font-weight:700;width:24%}
+table.cmp.layers td:last-child{color:var(--muted);width:26%}
+.attn{background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:16px 18px;margin-bottom:14px}
+.attn .words{display:flex;flex-wrap:wrap;gap:6px}
+.aw{font-family:var(--serif);font-size:28px;padding:4px 8px;border-radius:5px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;transition:background .4s}
+.aw small{font-size:14px;color:var(--muted);min-height:18px;font-variant-numeric:tabular-nums}
+.aw.key{border:2px solid var(--gain);font-weight:700}
+.attn .meaning{margin-top:8px;font-size:18px;color:var(--gain);font-weight:600;min-height:24px}
+/* tokens */
+.tokens{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 8px}
+.tok{display:flex;flex-direction:column;align-items:center;gap:6px}
+.tok .w{background:var(--gold-soft);border:1.5px solid var(--gold);border-radius:4px;font-family:var(--serif);padding:8px 12px;font-size:28px;white-space:pre}
+.tok .id{font-size:17px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* prediction demo — the centrepiece */
+.predict{flex:1;display:grid;grid-template-columns:1.05fr 1fr;gap:36px;min-height:0}
+.sentence{font-size:40px;line-height:1.3;font-family:var(--serif);min-height:156px}
+.sentence .new{color:var(--gold);text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+.sentence .blank{display:inline-block;width:110px;border-bottom:3px dashed var(--muted);height:1em;vertical-align:-4px}
+.book{align-self:start;background:var(--panel);border:1px solid var(--rule);border-top:4px solid var(--brand);border-radius:4px;padding:20px 24px}
+.book-head{display:flex;justify-content:space-between;font-size:15px;color:var(--muted);padding-bottom:10px;border-bottom:1px solid var(--rule);margin-bottom:10px}
+.bar{display:grid;grid-template-columns:130px 1fr 70px;align-items:center;gap:12px;padding:7px 0;font-size:22px}
+.bar .track{height:22px;background:var(--chip);border-radius:2px;overflow:hidden}
+.bar .fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--gold));width:0;transition:width .5s ease}
+.bar .pct{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.bar.picked .w{font-weight:800;color:var(--gain)}
+.loopnote{margin-top:18px;font-size:20px;color:var(--muted)}
+
+/* temperature */
+.temp{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:6px}
+.temp .box{padding:16px 24px}
+.temp .box h3{font-size:24px;margin-bottom:2px}
+.outs{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.out{font-size:20px;line-height:1.35;padding:8px 14px;border-radius:6px;background:var(--chip)}
+
+/* network */
+.netwrap{display:grid;grid-template-columns:1.1fr 1fr;gap:36px;flex:1;min-height:0;align-items:center}
+svg text{font-family:var(--font)}
+.eq{font-size:30px;font-family:var(--serif);background:var(--gold-soft);border-left:5px solid var(--gold);padding:14px 20px;border-radius:4px;margin:14px 0}
+
+table.cmp{border-collapse:collapse;width:100%;font-size:21px}
+table.cmp th,table.cmp td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.cmp th{font-size:17px;color:var(--brand);font-weight:700;border-bottom:2px solid var(--brand)}
+table.cmp td:first-child{font-weight:700;width:24%}
+
+/* training loop */
+.loop{display:flex;align-items:center;gap:14px;margin:16px 0 26px}
+.step{background:var(--panel);border:1px solid var(--rule);border-top:4px solid var(--brand);border-radius:4px;padding:16px 18px;font-size:21px;flex:1}
+.step b{display:block;font-size:24px;margin-bottom:4px;color:var(--brand)}
+.arrow{font-size:30px;color:var(--muted)}
+.scale{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.scale .box b{display:block;font-size:36px;color:var(--brand);margin-bottom:4px}
+.scale .box{font-size:19px}
+
+/* pipeline */
+.pipe{display:flex;gap:8px;margin:8px 0 22px}
+.pipe div{flex:1;background:var(--panel);border:1px solid var(--rule);border-top:5px solid var(--gain);border-radius:6px;padding:14px 12px;font-size:18px}
+.pipe b{display:block;font-size:20px;margin-bottom:4px}
+.cl{display:flex;align-items:stretch;gap:8px;margin-top:10px}.cl div{flex:1;background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:8px 10px;font-size:15px;line-height:1.35}.cl b{display:block;font-size:17px;color:var(--gold)}.cl span{align-self:center;font-size:22px;color:var(--muted)}
+.story{border:2px dashed var(--gold);background:var(--gold-soft);border-radius:10px;padding:18px 22px;font-size:21px}
+
+/* myths */
+.myth{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:12px}
+.myth div{padding:14px 20px;font-size:21px}
+.myth div:first-child{background:var(--loss-soft);text-decoration:line-through;text-decoration-color:rgba(200,35,29,.45)}
+.myth div:last-child{background:var(--panel)}
+.mhead{display:grid;grid-template-columns:1fr 1fr;font-size:17px;color:var(--brand);padding:0 20px 6px;font-weight:700}
+
+/* in-slide footer */
+.sfoot{position:absolute;left:80px;right:80px;bottom:24px;display:flex;justify-content:space-between;align-items:center;font-size:15px;color:var(--muted);border-top:1px solid var(--rule);padding-top:10px}
+.track5{display:flex;gap:6px;align-items:center}
+.track5 i{width:26px;height:6px;border-radius:1px;background:var(--rule)}
+.track5 i.on{background:var(--brand)}
+.track5 span{margin-right:6px}
+/* nav */
+#nav{position:fixed;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-top:1px solid var(--rule);background:var(--paper);gap:10px}
+#nav .row{gap:8px}
+#nav button{background:var(--slide);border:1px solid var(--rule);border-radius:4px;padding:6px 12px;font-size:15px}
+#count{font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+#progress{position:fixed;left:0;bottom:56px;height:3px;background:var(--brand);transition:width .3s}
+#notes{position:fixed;right:16px;bottom:72px;width:min(460px,calc(100vw - 32px));max-height:50vh;overflow:auto;background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px 18px;font-size:16px;line-height:1.5;display:none;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+#notes.open{display:block}
+#notesText{white-space:pre-line}
+#notes h4{font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
+aside.notes{display:none}
+@media (prefers-reduced-motion: reduce){ .bar .fill,#progress{transition:none} }
+@media (max-width:640px){ #nav .hide-sm{display:none} }
+
+/* Academic typography: consistent hierarchy and restrained emphasis. */
+:root{
+  --font:"Georgia", "Cambria", "Times New Roman", serif;
+  --serif:"Georgia", "Cambria", "Times New Roman", serif;
+  --ui-font:"Helvetica Neue", Arial, sans-serif;
+}
+body{font-kerning:normal;-webkit-font-smoothing:antialiased}
+.slide h1{font-size:72px;line-height:1.12;font-weight:700;letter-spacing:-.025em;max-width:20ch}
+.slide h2{font-size:42px;line-height:1.18;font-weight:700;letter-spacing:-.018em;margin-bottom:24px}
+.slide h3{font-size:24px;line-height:1.25;font-weight:700}
+.slide p,.slide li{font-size:24px;line-height:1.46;text-align:left}
+.slide b,.slide strong{font-weight:700}
+.slide .lede{font-size:25px;line-height:1.42}
+.slide .layer{font-family:var(--ui-font);font-size:17px;line-height:1.3;font-style:normal;font-weight:600;letter-spacing:.035em;margin-bottom:12px;color:var(--brand)}
+.slide .small{font-size:17px!important;line-height:1.42}
+.slide.title-slide .lede{font-style:normal;line-height:1.38;max-width:48ch}
+ul.plain{gap:15px}
+ul.plain li{padding-left:24px}
+ul.plain li::before{width:6px;height:6px;top:.6em;border-radius:50%}
+.guess{font-size:23px;line-height:1.42;font-weight:400;padding:22px 24px}
+.guess.reveal-right{font-weight:700}
+.msg{font-size:22px;line-height:1.48}
+.who{font-family:var(--ui-font);font-size:13px;line-height:1.4;font-weight:600;letter-spacing:.02em;margin-bottom:6px}
+.defbox{font-size:20px;line-height:1.45}
+.slide .loopnote{font-size:20px;line-height:1.45}
+.eq{font-family:"Cambria Math", "Cambria", "Times New Roman", serif;font-size:29px;line-height:1.35}
+table.cmp{font-size:20px;line-height:1.38}
+table.cmp th{font-family:var(--ui-font);font-size:16px;line-height:1.35;letter-spacing:.01em}
+table.cmp.layers{font-size:18px;line-height:1.35}
+.step{font-size:20px;line-height:1.4}
+.step b{font-size:23px;line-height:1.25;margin-bottom:8px}
+.scale .box{font-size:18px;line-height:1.4}
+.scale .box b{font-size:32px;line-height:1.18;margin-bottom:8px}
+.myth div{font-size:20px;line-height:1.4}
+.myth div:first-child{text-decoration:none}
+.mhead{font-family:var(--ui-font);font-size:16px;line-height:1.35}
+.out{font-size:19px;line-height:1.4}
+.btn,#nav,#count,.sfoot,.book-head,.tok .id,.aw small,#notes h4{font-family:var(--ui-font)}
+.btn{font-size:17px;line-height:1.35;font-weight:600}
+.sfoot{font-size:13px;line-height:1.35}
+#notes{font-family:var(--serif);font-size:17px;line-height:1.55}
+
+
+/* Slide 13: documented financial-services application. */
+.application-layout{display:grid;grid-template-columns:1.12fr 1fr;gap:36px;align-items:start}
+.applications-slide .plain li{font-size:22px;line-height:1.4}
+.application-caveat{margin-top:22px;padding-top:14px;border-top:1px solid var(--rule)}
+.application-case{margin:0;background:var(--panel);border:1px solid var(--rule);border-radius:6px;overflow:hidden;padding-bottom:16px}
+.application-case img{display:block;width:100%;height:218px;object-fit:cover;object-position:center}
+.application-case figcaption{font-family:var(--ui-font);font-size:11px;line-height:1.4;color:var(--muted);padding:7px 18px 0}
+.application-case h3{font-size:22px;line-height:1.25;color:var(--brand);margin:12px 18px 10px}
+.application-case p{font-size:18px;line-height:1.4;margin:0 18px 10px}
+.application-case .case-source{display:block;font-family:var(--ui-font);font-size:11px;line-height:1.4;color:var(--muted);margin:4px 18px 0;text-underline-offset:3px}
+
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+
+<!-- 1 -->
+<section class="slide title-slide" style="justify-content:center">
+  <div>
+    <h1>Large Language Models</h1>
+    <p class="lede" style="font-size:34px;margin-top:18px">The mechanics of AI chatbots: tokenisation, inference, architecture and training</p>
+  </div>
+  <aside class="notes">This lecture examines how an AI chatbot generates a response, from the tokenisation of the user's input to the model that produces the output.</aside>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <h2>A motivating example</h2>
+  <div class="chat">
+    <div class="msg user"><div class="who">User</div>If the central bank lowers interest rates, what is the effect on the price of bonds I currently hold?</div>
+    <div class="msg bot" id="botmsg"><div class="who">AI assistant</div><span id="bottext"></span></div>
+  </div>
+  <div class="row" style="margin-top:22px"><button class="btn" id="typeBtn">Generate response</button></div>
+  <aside class="notes">The response is fluent and appears authoritative. Retain this example: by the end of the lecture you should be able to explain the mechanism by which it was produced.</aside>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <h2>By what mechanism was this response produced?</h2>
+  <p class="lede">Consider the four hypotheses below before revealing the answer.</p>
+  <div class="guesses">
+    <button class="guess">It retrieved and reproduced a web page</button>
+    <button class="guess">It reasons about bond pricing as an analyst would</button>
+    <button class="guess">It consulted a stored finance textbook</button>
+    <button class="guess" data-right="1">It repeatedly predicted the most probable next token</button>
+  </div>
+  <div class="row" style="margin-top:20px"><button class="btn ghost" id="revealBtn">Reveal answer</button></div>
+  <aside class="notes">The underlying model does not search the internet or consult a database. It generates text by repeatedly predicting the next token. Some commercial chatbot products add a separate retrieval step on top of the model; this is a feature of the product rather than of the model itself.</aside>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <h2 style="margin-bottom:8px;max-width:none">Lecture structure</h2>
+  <p class="lede" style="margin-bottom:12px;max-width:none">The analysis proceeds from the familiar user-facing system to its underlying components, one layer at a time.</p>
+  <div class="defbox" style="font-size:19px">A chatbot is built on a <b>large language model (LLM)</b>: a neural network trained on a large corpus of text to estimate the probability distribution of the next token, conditional on all preceding tokens.</div>
+  <table class="cmp layers">
+    <tr><th></th><th>Layer</th><th>Process</th><th>Technical terminology</th></tr>
+    <tr><td class="n">1</td><td>Tokenisation</td><td>Input text is segmented into tokens, each mapped to a numerical vector</td><td>Tokenisation, embeddings</td></tr>
+    <tr><td class="n">2</td><td>Prediction</td><td>A probability is assigned to every candidate next token; one is selected and the process repeats</td><td>Inference, temperature</td></tr>
+    <tr><td class="n">3</td><td>Architecture</td><td>Successive layers of computation determine the relative importance of each token</td><td>Neural network, transformer, attention</td></tr>
+    <tr><td class="n">4</td><td>Training</td><td>Parameters are estimated by iteratively minimising next-token prediction error</td><td>Loss function, gradient descent</td></tr>
+    <tr><td class="n">5</td><td>Limitations</td><td>Output may be fluent yet factually incorrect or biased</td><td>Hallucination, bias</td></tr>
+  </table>
+  <p class="small" style="margin-top:10px">Source: IBM, “What are large language models (LLMs)?”, ibm.com/think</p>
+  <aside class="notes">A large language model (LLM) is a neural network trained on a large text corpus to predict the next token. The lecture examines it in five layers. The terms in the right-hand column form the standard vocabulary of both industry practice and the academic literature. Source: IBM, "What are large language models (LLMs)?"</aside>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <p class="layer">Layer 1: Tokenisation</p>
+  <h2>The model operates on numbers, not words</h2>
+  <p>Input text is segmented into units called <b>tokens</b>, each of which is assigned an integer identifier:</p>
+  <div class="tokens" id="tokens"></div>
+  <p class="small">Identifiers are illustrative. Production tokenisers typically have vocabularies of approximately 50,000 to 200,000 tokens.</p>
+  <p style="margin-top:18px">Note that a less frequent word such as <b>“compressed”</b> may be split into sub-word units. Each identifier is then mapped to a high-dimensional vector (an <b>embedding</b>), on which all subsequent computation is performed.</p>
+  <aside class="notes">Text is segmented into tokens, which may be whole words, sub-word units or individual characters. Each token receives an integer identifier and is then represented as a vector of real numbers (an embedding). Less frequent words are commonly split into several tokens. All subsequent operations are numerical computations on these vectors.</aside>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <p class="layer">Layer 2: Prediction</p>
+  <h2 style="margin-bottom:18px">Text generation as sequential forecasting</h2>
+  <div class="predict">
+    <div>
+      <div class="sentence" id="sentence"></div>
+      <div class="row" style="margin-top:22px">
+        <button class="btn" id="stepBtn">Predict next token</button>
+        <button class="btn ghost" id="resetBtn">Reset</button>
+      </div>
+      <p class="loopnote">The selected token is appended to the sequence and the forecast is repeated. A complete response is the outcome of several hundred iterations of this procedure.</p>
+    </div>
+    <div class="book">
+      <div class="book-head"><span>Candidate next token</span><span>Probability</span></div>
+      <div id="bars"></div>
+    </div>
+  </div>
+  <aside class="notes">At each step the model computes a probability for every token in its vocabulary, conditional on the preceding sequence: P(next token | previous tokens). A token is selected, appended to the sequence, and the process repeats. This is termed inference, or autoregressive generation. The model does not plan the complete response in advance.</aside>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <p class="layer">Layer 2: Prediction</p>
+  <h2 style="max-width:none">Why identical prompts yield different responses</h2>
+  <p style="max-width:none">The <b>temperature</b> parameter governs randomness in token selection: low values favour the most probable token, whereas high values admit less probable ones.</p>
+  <div class="row" style="margin:6px 0 10px"><button class="btn" id="runBtn">Resubmit prompt: “Describe today’s stock market in one sentence”</button></div>
+  <div class="temp">
+    <div class="box">
+      <h3>Low temperature</h3><p class="small">Near-deterministic and reproducible; suited to formal reporting.</p>
+      <div class="outs" id="lowOuts"></div>
+    </div>
+    <div class="box">
+      <h3>High temperature</h3><p class="small">More diverse, but more prone to error.</p>
+      <div class="outs" id="highOuts"></div>
+    </div>
+  </div>
+  <aside class="notes">Temperature rescales the probability distribution before sampling. At low temperature the most probable token is selected almost invariably, producing consistent output. At high temperature less probable tokens are selected more often, producing more varied output with a higher incidence of error.</aside>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <p class="layer">Layer 3: Architecture</p>
+  <h2 style="margin-bottom:10px">The fundamental building block: linear regression</h2>
+  <div class="netwrap">
+    <div>
+      <p>From econometrics:</p>
+      <div class="eq">y = β₀ + β₁x₁ + β₂x₂</div>
+      <p>A single artificial neuron:</p>
+      <div class="eq">output = f( w₁x₁ + w₂x₂ + b )</div>
+      <p class="small">A weighted sum of inputs is passed through a non-linear activation function <i>f</i>, which allows the network to approximate non-linear relationships.</p>
+    </div>
+    <svg id="net" viewBox="0 0 520 400" role="img" aria-label="Neural network diagram with input, two hidden layers and output"></svg>
+  </div>
+  <aside class="notes">An artificial neuron is analogous to a linear regression: each input is multiplied by a weight, a bias term is added, and the result is passed through a non-linear activation function. Stacking many layers of such neurons yields a neural network capable of approximating highly complex, non-linear relationships.</aside>
+</section>
+
+<!-- transformer -->
+<section class="slide">
+  <p class="layer">Layer 3: The transformer</p>
+  <h2 style="margin-bottom:14px;max-width:none">Attention: how the model weights context</h2>
+  <div class="cols" style="grid-template-columns:1.25fr 1fr;gap:32px">
+    <div>
+      <p class="small" style="margin-bottom:10px">Select the word <b>bank</b> in each sentence.</p>
+      <div class="attn" data-set="0"></div>
+      <div class="attn" data-set="1"></div>
+      <p class="small">Shading indicates the attention weight assigned by “bank” to each word (illustrative values).</p>
+    </div>
+    <div style="padding-top:34px">
+      <ul class="plain" style="--fs:21px">
+        <li><b>Attention:</b> each token computes a relevance score for every other token in the sequence.</li>
+        <li><b>Depth:</b> the operation is repeated across many layers, progressively refining each token's contextual representation.</li>
+        <li><b>Position:</b> positional encoding preserves word order, so that “bank lends to firm” is distinguished from “firm lends to bank”.</li>
+      </ul>
+      <div class="defbox" style="margin-top:18px">By analogy, an analyst reading an earnings report infers from the surrounding terms whether “margin” refers to profit margin or to margin lending.</div>
+    </div>
+  </div>
+  <aside class="notes">Contemporary LLMs are based on the transformer architecture (Vaswani et al., 2017). Its central mechanism is attention: each token assesses the relevance of every other token, so that the same word, such as "bank", acquires a different representation in a different context. The model also encodes word order (positional encoding) and refines each token's representation across many layers.</aside>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <p class="layer">Layer 3: Architecture</p>
+  <h2>Linear regression and large language models compared</h2>
+  <table class="cmp">
+    <tr><th></th><th>Linear regression</th><th>Large language model</th></tr>
+    <tr><td>Parameters</td><td>A small number of coefficients</td><td>Up to hundreds of billions of weights</td></tr>
+    <tr><td>Inputs</td><td>Explanatory variables, e.g. interest rates, GDP, inflation</td><td>The token sequence generated to date</td></tr>
+    <tr><td>Interaction of inputs</td><td>Fixed, additive effects unless interaction terms are specified</td><td>Context-dependent weighting of every token (attention)</td></tr>
+    <tr><td>Output</td><td>A point estimate, e.g. expected return</td><td>A probability distribution over the vocabulary</td></tr>
+    <tr><td>Estimation</td><td>Minimise the sum of squared residuals</td><td>Minimise cross-entropy loss (equivalently, maximise likelihood)</td></tr>
+    <tr><td>Interpretability</td><td>High: each coefficient has a direct interpretation</td><td>Low: individual weights lack a direct interpretation (the “black box” problem)</td></tr>
+  </table>
+  <aside class="notes">An LLM may be viewed as a non-linear extension of regression at an enormous scale. Unlike a regression coefficient, however, its individual parameters cannot be meaningfully interpreted in isolation; hence the characterisation of such models as black boxes.</aside>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <p class="layer">Layer 4: Training</p>
+  <h2>Training as iterative estimation</h2>
+  <div class="loop">
+    <div class="step"><b>Predict</b>Forecast the next token of a sentence from the training corpus</div><span class="arrow">›</span>
+    <div class="step"><b>Evaluate</b>Compare with the observed token and compute the loss</div><span class="arrow">›</span>
+    <div class="step"><b>Update</b>Adjust every weight marginally in the direction that reduces the loss</div><span class="arrow">↺</span>
+  </div>
+  <p>The update rule is <b>gradient descent</b>: a numerical optimisation method that moves iteratively in the direction of steepest decrease of the loss function. It is conceptually analogous to least-squares estimation, although no closed-form solution exists.</p>
+  <div class="scale" style="margin-top:22px">
+    <div class="box"><b>Trillions</b>of tokens of training text (published estimates for frontier models)</div>
+    <div class="box"><b>Thousands</b>of specialised processors operating for weeks or months</div>
+    <div class="box"><b>Human feedback</b>applied after pre-training to improve helpfulness and safety</div>
+  </div>
+  <aside class="notes">Training repeats a single procedure: predict the next token, measure the error with a loss function (cross-entropy), and update the weights by gradient descent. This is analogous in spirit to least-squares estimation. Following this pre-training phase, reinforcement learning from human feedback (RLHF) is used to improve the helpfulness and safety of the model.</aside>
+</section>
+
+<!-- 11 -->
+<section class="slide">
+  <p class="layer">Layer 5: Limitations</p>
+  <h2 style="margin-bottom:18px">Fluency does not imply accuracy</h2>
+  <div class="cols">
+    <div class="chat" style="max-width:none">
+      <div class="msg user" style="max-width:92%"><div class="who">User</div>What was Harbourview Savings Bank’s net profit in Q2? Please cite the source.</div>
+      <div class="msg bot warn" style="max-width:92%"><div class="who">AI assistant</div>Net profit was $48.3 million, up 12% year on year, according to page 7 of its Q2 earnings release.<br><span class="stamp">Figure and citation fabricated</span></div>
+    </div>
+    <div>
+      <ul class="plain">
+        <li><b>Hallucination:</b> the model generates a plausible figure; it does not retrieve one.</li>
+        <li><b>Knowledge cutoff:</b> training data end at a fixed date, whereas markets continue to move.</li>
+        <li><b>Numerical unreliability:</b> numbers are processed as tokens, so NPV and ratio calculations require independent verification.</li>
+        <li><b>Bias:</b> the model reproduces biases present in its training data.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="small">The institution cited is fictional.</p>
+  <aside class="notes">Because the model generates plausible text rather than retrieving facts, it may state false information with apparent confidence (hallucination). Its knowledge ends at a training cutoff date, it may mishandle numerical calculations, and it may reproduce biases in its training data. Figures should always be verified against the primary source.</aside>
+</section>
+
+<!-- 13 -->
+<section class="slide applications-slide">
+  <h2>Applications in financial services</h2>
+  <div class="application-layout">
+    <div>
+      <ul class="plain">
+        <li><b>Client service:</b> responding to account and product enquiries.</li>
+        <li><b>Research:</b> summarising earnings calls, regulatory filings and research documents.</li>
+        <li><b>Compliance:</b> assisting with contract review and identifying high-risk clauses.</li>
+        <li><b>Productivity:</b> drafting meeting notes, correspondence and preliminary analysis.</li>
+      </ul>
+      <p class="small application-caveat">Fraud detection and credit scoring usually employ other classes of machine-learning model. Financial professionals remain responsible for verifying and explaining model output.</p>
+    </div>
+    <figure class="application-case">
+      <img src="https://images.ctfassets.net/kftzwdyauwt9/4zI3Ek3Z4ECXj7tDQL0dei/f5ec3f5ad987085f8c59ce9932e7e710/1.png" alt="Photograph from OpenAI’s Morgan Stanley case study showing a firm representative in an office discussion" width="480" height="235">
+      <figcaption>Photograph: Morgan Stanley case study, OpenAI.</figcaption>
+      <h3>Real-world example: Morgan Stanley</h3>
+      <p><b>AI Assistant</b> helps advisers retrieve information from the firm’s internal knowledge base.</p>
+      <p><b>AI Debrief</b> summarises client meetings and drafts follow-up messages, with client consent and adviser review.</p>
+      <a class="case-source" href="https://openai.com/index/morgan-stanley/" target="_blank" rel="noopener noreferrer">Source: OpenAI, Morgan Stanley case study ↗</a>
+    </figure>
+  </div>
+  <aside class="notes">Morgan Stanley provides a documented example of AI in wealth management. Its AI Assistant helps financial advisers retrieve internal information. AI Debrief processes recorded client meetings, with client consent, into notes and draft follow-up communications. Advisers review the outputs. The photograph comes from OpenAI’s published Morgan Stanley case study; it is not a screenshot of the software. Source: https://openai.com/index/morgan-stanley/ . Fraud detection and credit scoring typically use other classes of machine-learning model.</aside>
+</section>
+
+<!-- 14 -->
+<section class="slide">
+  <h2>Common misconceptions</h2>
+  <div class="mhead"><span>Misconception</span><span>Reality</span></div>
+  <div class="myth"><div>The model understands finance as an analyst does</div><div>It predicts probable token sequences learned from text</div></div>
+  <div class="myth"><div>A confident response is a correct response</div><div>Expressed confidence is not a reliable indicator of accuracy</div></div>
+  <div class="myth"><div>The model has access to current market data</div><div>Only where it is connected to a live data source</div></div>
+  <div class="myth"><div>The model is inexplicable</div><div>The mechanism is well understood; individual weights are difficult to interpret</div></div>
+  <aside class="notes">Review each pair. You should be able to justify each statement in the right-hand column with reference to the lecture material.</aside>
+</section>
+
+<!-- 15 -->
+<section class="slide">
+  <h2>Exercise: evaluating chatbot output</h2>
+  <p style="margin-bottom:16px">Submit three prompts to an AI chatbot and verify each response against an authoritative source.</p>
+  <div class="loop" style="margin-top:0;align-items:stretch">
+    <div class="step"><b>Conceptual</b>“Explain bond duration.” Verify against the course textbook.</div>
+    <div class="step"><b>Computational</b>“Calculate the NPV of an outlay of 1,000 followed by four annual inflows of 300 at 8%.” Verify in Excel.</div>
+    <div class="step"><b>Factual</b>“State the latest annual revenue of a named listed company.” Verify against the annual report.</div>
+  </div>
+  <p>Classify each response as <b style="color:var(--gain)">correct</b>, <b style="color:#B85A00">partially correct</b> or <b style="color:var(--loss)">incorrect</b>. Which category of prompt produced the most errors, and how may this be explained with reference to the lecture?</p>
+  <aside class="notes">Record each response, the source used for verification, and your classification. Note on the NPV check in Excel: the NPV function discounts the first value by one period, so the initial outlay must be entered separately, e.g. =-1000+NPV(8%,300,300,300,300). For each error identified, state which layer of the lecture accounts for it.</aside>
+</section>
+
+
+</div></div>
+
+<div id="progress"></div>
+<div id="notes"><h4>Study notes</h4><div id="notesText"></div></div>
+<nav id="nav">
+  <div class="row">
+    <button id="prev" aria-label="Previous slide">‹ Back</button>
+    <button id="next" aria-label="Next slide">Next ›</button>
+    <span id="count"></span>
+  </div>
+  <div class="row">
+    <button id="notesBtn">Study notes (N)</button>
+    <button id="themeBtn" class="hide-sm">Theme</button>
+    <button id="fsBtn" class="hide-sm">Full screen (F)</button>
+  </div>
+</nav>
+
+<script>
+(function(){
+  const slides=[...document.querySelectorAll('.slide')];
+  const stage=document.getElementById('stage'), vp=document.getElementById('viewport');
+  let cur=0;
+
+  const layerOf=sl=>{const l=sl.querySelector('.layer');const m=l&&l.textContent.match(/Layer (\d)/);return m?+m[1]:0;};
+  slides.forEach((sl,i)=>{
+    const f=document.createElement('div');f.className='sfoot';
+    const L=layerOf(sl);
+    f.innerHTML='<span>Large language models: the mechanics of AI chatbots</span><span class="track5">'+(L?'<span>Layer '+L+' of 5</span>'+[1,2,3,4,5].map(k=>'<i class="'+(k<=L?'on':'')+'"></i>').join(''):'')+'<span style="margin-left:14px">'+(i+1)+'</span></span>';
+    sl.appendChild(f);
+  });
+  function fit(){
+    const s=Math.min(vp.clientWidth/1280, vp.clientHeight/720);
+    stage.style.transform='scale('+s+')';
+  }
+  window.addEventListener('resize',fit); fit();
+
+  function show(i){
+    cur=Math.max(0,Math.min(slides.length-1,i));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+    document.getElementById('count').textContent=(cur+1)+' / '+slides.length;
+    document.getElementById('progress').style.width=((cur+1)/slides.length*100)+'%';
+    const n=slides[cur].querySelector('aside.notes');
+    document.getElementById('notesText').textContent=n?n.textContent.trim():'';
+    try{history.replaceState(null,'','#'+(cur+1));}catch(e){}
+  }
+  document.getElementById('prev').onclick=()=>show(cur-1);
+  document.getElementById('next').onclick=()=>show(cur+1);
+  const notesEl=document.getElementById('notes');
+  const toggleNotes=()=>notesEl.classList.toggle('open');
+  document.getElementById('notesBtn').onclick=toggleNotes;
+  const toggleFs=()=>{ if(!document.fullscreenElement){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{});} else {document.exitFullscreen();} };
+  document.getElementById('fsBtn').onclick=toggleFs;
+  document.getElementById('themeBtn').onclick=()=>{
+    const r=document.documentElement;
+    const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+    r.dataset.theme=dark?'light':'dark';
+  };
+  document.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT')return;
+    if(['ArrowRight','PageDown',' '].includes(e.key)){ if(e.key===' '&&e.target.tagName==='BUTTON')return; e.preventDefault(); show(cur+1);}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault(); show(cur-1);}
+    else if(e.key==='n'||e.key==='N') toggleNotes();
+    else if(e.key==='f'||e.key==='F') toggleFs();
+    else if(e.key==='Home') show(0);
+    else if(e.key==='End') show(slides.length-1);
+  });
+
+  // Slide 2: typed answer
+  const answer="Bond prices would generally rise. Existing bonds pay a fixed coupon that now exceeds the yield available on newly issued bonds, so their market value increases. The price response is greater for bonds with longer duration.";
+  let typing=false;
+  document.getElementById('typeBtn').onclick=()=>{
+    if(typing)return; typing=true;
+    const el=document.getElementById('bottext'); el.textContent='';
+    const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(reduce){el.textContent=answer;typing=false;return;}
+    const words=answer.split(' '); let k=0;
+    const t=setInterval(()=>{ el.textContent+=(k?' ':'')+words[k++]; if(k>=words.length){clearInterval(t);typing=false;} },70);
+  };
+
+  // Slide 3: reveal
+  document.getElementById('revealBtn').onclick=()=>{
+    document.querySelectorAll('.guess').forEach(g=>g.classList.add(g.dataset.right?'reveal-right':'reveal-wrong'));
+  };
+
+  // Slide 5: tokens
+  const toks=[["Net",8905],[" interest",2802],[" margin",6923],[" compress",25133],["ed",276],[" in",287],[" Q",1195],["3",18],[".",13]];
+  document.getElementById('tokens').innerHTML=toks.map(([w,id])=>'<div class="tok"><span class="w">'+w.replace(/ /g,'·')+'</span><span class="id">'+id+'</span></div>').join('');
+
+  // Slide 6: prediction
+  const base="The central bank raised interest";
+  const steps=[
+    [["rates",.86],["payments",.04],["charges",.03],["costs",.02],["expectations",.02]],
+    [["by",.41],["to",.22],["again",.12],["sharply",.08],["today",.06]],
+    [["25",.38],["50",.27],["a",.14],["0.25",.09],["half",.05]],
+    [["basis",.81],["bps",.09],["points",.06],["percent",.02],["bp",.01]],
+    [["points",.97],["point",.02],["pts",.01]]
+  ];
+  let added=[], stage6=0;
+  function renderPred(showPick){
+    const s=document.getElementById('sentence');
+    const words=added.map((w,i)=>i===added.length-1&&showPick?'<span class="new">'+w+'</span>':w);
+    s.innerHTML=base+(words.length?' '+words.join(' '):'')+(stage6<steps.length?' <span class="blank"></span>':'.');
+    const bars=document.getElementById('bars');
+    if(stage6>=steps.length){bars.innerHTML='<p class="small">Sequence complete. Each token was drawn from a conditional probability distribution of the kind shown above.</p>';document.getElementById('stepBtn').disabled=true;return;}
+    document.getElementById('stepBtn').disabled=false;
+    bars.innerHTML=steps[stage6].map(([w,p])=>'<div class="bar"><span class="w">'+w+'</span><div class="track"><div class="fill" data-p="'+p+'"></div></div><span class="pct">'+Math.round(p*100)+'%</span></div>').join('');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>bars.querySelectorAll('.fill').forEach(f=>f.style.width=(f.dataset.p*100)+'%')));
+  }
+  document.getElementById('stepBtn').onclick=()=>{
+    if(stage6>=steps.length)return;
+    const first=document.querySelector('#bars .bar'); if(first)first.classList.add('picked');
+    const w=steps[stage6][0][0];
+    setTimeout(()=>{added.push(w); stage6++; renderPred(true);},450);
+  };
+  document.getElementById('resetBtn').onclick=()=>{added=[];stage6=0;renderPred(false);};
+  renderPred(false);
+
+  // Slide 7: temperature
+  const low="Equity markets were mixed today as investors awaited new inflation data.";
+  const highs=[
+    "Equities drifted within a narrow range as investors positioned ahead of tomorrow's inflation release.",
+    "Technology stocks advanced while financials declined, leaving the broad index little changed.",
+    "Markets resembled a cautious game of musical chairs ahead of the central bank's next decision.",
+    "Headline indices were flat, although rotation into defensive sectors was pronounced.",
+    "Growth stocks rallied into the close despite weaker-than-expected economic data."
+  ];
+  let runs=0;
+  function renderTemp(){
+    const lo=document.getElementById('lowOuts'), hi=document.getElementById('highOuts');
+    const n=Math.min(runs,3);
+    lo.innerHTML=Array.from({length:n},()=>'<div class="out">'+low+'</div>').join('')||'<p class="small">Select “Resubmit prompt” to generate responses.</p>';
+    const start=Math.max(0,runs-3);
+    hi.innerHTML=Array.from({length:n},(_,k)=>'<div class="out">'+highs[(start+k)%highs.length]+'</div>').join('')||'<p class="small">Select “Resubmit prompt” to generate responses.</p>';
+  }
+  document.getElementById('runBtn').onclick=()=>{runs++;renderTemp();};
+  renderTemp();
+
+  // Transformer attention demo
+  const sets=[
+    {w:["The","bank","raised","its","interest","rates."],a:[.05,0,.15,.05,.35,.40],m:"Inferred sense of “bank”: a financial institution"},
+    {w:["We","had","a","picnic","on","the","river","bank."],a:[.04,.04,.02,.25,.10,.05,.50,0],m:"Inferred sense of “bank”: the edge of a river"}
+  ];
+  document.querySelectorAll('.attn').forEach(box=>{
+    const d=sets[+box.dataset.set];
+    box.innerHTML='<div class="words">'+d.w.map((w,i)=>{
+      const isKey=w.startsWith('bank');
+      return (isKey?'<button class="aw key"':'<span class="aw"')+' data-i="'+i+'">'+w+'<small></small>'+(isKey?'</button>':'</span>');
+    }).join('')+'</div><div class="meaning"></div>';
+    box.querySelector('.key').onclick=()=>{
+      box.querySelectorAll('.aw').forEach(el=>{
+        const i=+el.dataset.i, v=d.a[i];
+        if(el.classList.contains('key'))return;
+        el.style.background='color-mix(in srgb, var(--gain) '+Math.round(v*110)+'%, transparent)';
+        el.querySelector('small').textContent=Math.round(v*100)+'%';
+      });
+      box.querySelector('.meaning').textContent=d.m;
+    };
+  });
+
+  // Slide 8: network diagram
+  const svg=document.getElementById('net'), NS='http://www.w3.org/2000/svg';
+  const layers=[3,5,5,2], xs=[60,200,340,470], labels=['Inputs','Hidden layer','Hidden layer','Outputs'];
+  const pos=layers.map((n,li)=>Array.from({length:n},(_,i)=>[xs[li],70+(i+.5)*(300/n)]));
+  function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e;}
+  for(let l=0;l<layers.length-1;l++) pos[l].forEach(a=>pos[l+1].forEach(b=>el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:'var(--rule)','stroke-width':1.4})));
+  pos.forEach((layer,li)=>layer.forEach(([x,y])=>el('circle',{cx:x,cy:y,r:15,fill:li===0?'var(--gold-soft)':li===3?'var(--gain-soft)':'var(--panel)',stroke:li===0?'var(--gold)':'var(--gain)','stroke-width':2})));
+  labels.forEach((t,i)=>{const e=el('text',{x:xs[i],y:30,'text-anchor':'middle','font-size':15,fill:'var(--muted)'});e.textContent=t;});
+  const inTxt=['tokens','',''], outTxt=['“rates”','“payments”'];
+  const cap=el('text',{x:260,y:395,'text-anchor':'middle','font-size':15,fill:'var(--muted)'});cap.textContent='Each connection represents an estimated weight';
+  outTxt.forEach((t,i)=>{const e=el('text',{x:470,y:pos[3][i][1]+36,'text-anchor':'middle','font-size':14,fill:'var(--ink)'});e.textContent=t;});
+
+  const h=parseInt(location.hash.slice(1),10);
+  show(isNaN(h)?0:h-1);
+})();
+</script>
+</body>
+</html>
